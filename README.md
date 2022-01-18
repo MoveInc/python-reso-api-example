@@ -5,6 +5,7 @@ Incremental runs every hour once the full pull is done. This updates the listing
 >- The script downloads all listings first, downloads the photos, then inserts the data into the database. This means the download process is all or nothing.
 ## Note:
 > The full dataset pull takes a while.
+> You will need an mssql server running, the script by default uses user root and password root which can be changed in /scripts/python/create_db.py
 
 # Usage: 
 >Get all the listings for the publisher with the provided client-id and client-secret.
