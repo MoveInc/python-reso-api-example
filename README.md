@@ -6,11 +6,11 @@ Incremental runs every hour once the full pull is done. This updates the listing
 ## Note:
 > The full dataset pull takes a while.
 
-#Usage: 
+# Usage: 
 >Get all the listings for the publisher with the provided client-id and client-secret.
 >- ./get_listings_data.py -i &lt;client-id&gt; -s &lt;client-secret&gt;
 
-####Example:
+#### Example:
 >- ./get_listings_data.py -i "public_sandbox" -s "public_sandbox"
 - Running this starts a loop that will download a full data set from the api, then every hour after will download an incremental until a day has passed. After a day has passed the full will run again. The full deletes old listings, incrementals do not.
 
