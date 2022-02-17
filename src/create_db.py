@@ -1,13 +1,11 @@
 import mysql.connector
 from mysql.connector import errorcode
 
-DB_NAME = 'listings_db'
-
 
 # create database.
-def _create_database(cursor):
+def _create_database(cursor, opts: dict):
     try:
-        cursor.execute('create database ' + DB_NAME)
+        cursor.execute('create database ' + opts["db_name"])
     except mysql.connector.Error as err:
         print("Failed creating database: {}".format(err))
         exit(1)
@@ -23,7 +21,7 @@ def _show_db(cursor):
 # Create tables property and media.
 def _create_tables(cursor):
     try:
-        createProperty = ''' CREATE TABLE property (
+        create_property = ''' CREATE TABLE property (
                         ListingKey varchar(255) NOT NULL,
                         ListingId varchar(255),
                         ModificationTimestamp varchar(255),
@@ -47,15 +45,15 @@ def _create_tables(cursor):
                         FireplaceYN boolean,
                         WaterfrontYN boolean,
                         PRIMARY KEY (ListingKey))'''
-        createMedia = '''CREATE TABLE media (
-                        MediaKey varchar(255) NOT NULL,
-                        ListingKey varchar(255) NOT NULL,
-                        MediaURL varchar(600),
-                        MediaModificationTimestamp varchar(255),
-                        FOREIGN key (ListingKey) REFERENCES
-                            property(ListingKey))'''
-        cursor.execute(createProperty)
-        cursor.execute(createMedia)
+        create_media = ('CREATE TABLE media ( '
+                        'MediaKey varchar(255) NOT NULL, '
+                        'ListingKey varchar(255) NOT NULL, '
+                        'MediaURL varchar(600), '
+                        'MediaModificationTimestamp varchar(255), '
+                        'FOREIGN key (ListingKey) REFERENCES '
+                        'property(ListingKey))')
+        cursor.execute(create_property)
+        cursor.execute(create_media)
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
             print("Tables already exist.")
@@ -67,17 +65,17 @@ def _create_tables(cursor):
 
 # Create a database and the tables. Name of database can be changed by
 # assigning value to the global variable DB_NAME.
-def create_db():
+def create_db(opts: dict):
     db_connection = mysql.connector.connect(user='root', password='root')
     cursor = db_connection.cursor()
     try:
-        cursor.execute('USE ' + DB_NAME)
+        cursor.execute('USE ' + opts["db_name"])
     except mysql.connector.Error as err:
-        print("Database {} does not exists.".format(DB_NAME))
+        print("Database {} does not exists.".format(opts["db_name"]))
         if err.errno == errorcode.ER_BAD_DB_ERROR:
-            _create_database(cursor)
-            print("Database {} created successfully.".format(DB_NAME))
-            db_connection.database = DB_NAME
+            _create_database(cursor, opts)
+            print("Database {} created successfully.".format(opts["db_name"]))
+            db_connection.database = opts["db_name"]
         else:
             print(err)
             exit(1)
@@ -87,12 +85,13 @@ def create_db():
 
 
 # Connect to the database and return the db connector and cursor.
-def connect_db():
+def connect_db(opts: dict):
     try:
         db_connection = mysql.connector.connect(user='root', password='root')
         cursor = db_connection.cursor()
-        cursor.execute('USE ' + DB_NAME)
+        print(f"DB NAME {opts['db_name']}")
+        cursor.execute('USE ' + opts["db_name"])
+        return db_connection, cursor
     except mysql.connector.Error as err:
         print("Failed creating database: {}".format(err))
         exit(1)
-    return db_connection, cursor

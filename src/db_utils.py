@@ -21,87 +21,86 @@ class ListingState(IntEnum):
 
 
 # Create a list of data.
-def _create_data(property):
+def _create_data(reso_property) -> list:
     data = []
     for key in keys:
-        if key not in property:
+        if key not in reso_property:
             data.append(None)
-        elif type(property[key]) is list:
-            data.append(str(property[key]).strip('[]'))
+        elif type(reso_property[key]) is list:
+            data.append(str(reso_property[key]).strip('[]'))
         else:
-            data.append(property[key])
+            data.append(reso_property[key])
     return data
 
 
 # Insert property values to the property table
 def insert_table_data(key, properties, db_conn, db_cursor):
-    sql_query = '''INSERT INTO property (ListingKey, ListingId,
-                    ModificationTimestamp, PropertyType, PropertySubType,
-                    UnparsedAddress, PostalCity, StateOrProvince,
-                    Country, ListPrice, PostalCode, BedroomsTotal,
-                    BathroomsTotalInteger, StandardStatus, PhotosCount,
-                    Cooling, Heating, Latitude, Longitude,
-                    LeadRoutingEmail, FireplaceYN, WaterfrontYN)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
-    data = _create_data(properties[key])
+    sql_query = ('INSERT INTO property (ListingKey, ListingId, '
+                 'ModificationTimestamp, PropertyType, PropertySubType, '
+                 'UnparsedAddress, PostalCity, StateOrProvince, '
+                 'Country, ListPrice, PostalCode, BedroomsTotal, '
+                 'BathroomsTotalInteger, StandardStatus, PhotosCount, '
+                 'Cooling, Heating, Latitude, Longitude, '
+                 'LeadRoutingEmail, FireplaceYN, WaterfrontYN) '
+                 'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, '
+                 '%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)')
+    data: list = _create_data(properties[key])
     _execute_query_with_rollback(sql_query, data, db_conn, db_cursor)
 
 
 # insert media entry to media table.
 def insert_media(media_values, db_conn, db_cursor):
-    sql_query_media = '''INSERT INTO media (MediaKey, MediaURL,
-                          MediaModificationTimestamp, ListingKey)
-                          VALUES (%s, %s, %s, %s)'''
+    sql_query_media = ('INSERT INTO media (MediaKey, MediaURL, MediaModificationTimestamp, ListingKey) '
+                       'VALUES (%s, %s, %s, %s)')
     media = media_values.copy()
     media.pop(-1)
-    listingKey = media.pop(1)
-    media.append(listingKey)
+    listingkey = media.pop(1)
+    media.append(listingkey)
     _execute_query_with_rollback(sql_query_media, media, db_conn, db_cursor)
 
 
 # Update media table
 def update_media(media_values, db_conn, db_cursor):
-    sql_query_media = '''UPDATE media SET MediaURL = %s,
-                          MediaModificationTimestamp = %s WHERE
-                          ListingKey=%s AND MediaKey=%s'''
+    sql_query_media = ('UPDATE media SET MediaURL = %s, '
+                       'MediaModificationTimestamp = %s '
+                       'WHERE ListingKey=%s AND MediaKey=%s')
     media = media_values.copy()
     media.pop(-1)
-    listingKey = media.pop(1)
-    mediaKey = media.pop(0)
-    media.append(listingKey)
-    media.append(mediaKey)
+    listingkey = media.pop(1)
+    mediakey = media.pop(0)
+    media.append(listingkey)
+    media.append(mediakey)
     _execute_query_with_rollback(sql_query_media, media, db_conn, db_cursor)
 
 
 # Delete the media from media table
 def delete_media(media, db_conn, db_cursor):
-    sql_query_media = '''DELETE FROM media WHERE MediaKey = %s and
-                        ListingKey = %s'''
-    data = (media[0], media[1],)
+    sql_query_media = 'DELETE FROM media WHERE MediaKey = %s and ListingKey = %s'
+    data = [media[0], media[1]]
     _execute_query_with_rollback(sql_query_media, data, db_conn, db_cursor)
 
 
 # Update property table.
 def update_table_data(key, properties, db_conn, db_cursor):
-    sql_query = '''UPDATE property SET ListingId = %s,
-                    ModificationTimestamp = %s, PropertyType = %s,
-                    PropertySubType = %s, UnparsedAddress = %s,
-                    PostalCity = %s, StateOrProvince = %s, Country = %s,
-                    ListPrice = %s, PostalCode = %s, BedroomsTotal = %s,
-                    BathroomsTotalInteger = %s, StandardStatus = %s,
-                    PhotosCount = %s, Cooling = %s,
-                    Heating = %s, Latitude = %s, Longitude = %s,
-                    LeadRoutingEmail = %s, FireplaceYN = %s,
-                    WaterfrontYN = %s WHERE ListingKey=%s'''
-    data = _create_data(properties[key])
-    ListingKey = data.pop(0)
-    data.append(ListingKey)
+    sql_query: str = ('UPDATE property SET ListingId = %s, '
+                      'ModificationTimestamp = %s, PropertyType = %s, '
+                      'PropertySubType = %s, UnparsedAddress = %s,'
+                      'PostalCity = %s, StateOrProvince = %s, Country = %s, '
+                      'ListPrice = %s, PostalCode = %s, BedroomsTotal = %s, '
+                      'BathroomsTotalInteger = %s, StandardStatus = %s, '
+                      'PhotosCount = %s, Cooling = %s, '
+                      'Heating = %s, Latitude = %s, Longitude = %s, '
+                      'LeadRoutingEmail = %s, FireplaceYN = %s, '
+                      'WaterfrontYN = %s '
+                      'WHERE ListingKey= %s')
+    data: list = _create_data(properties[key])
+    listingkey = data.pop(0)
+    data.append(listingkey)
     _execute_query_with_rollback(sql_query, data, db_conn, db_cursor)
 
 
 # Execute sql query with rollback when fails.
-def _execute_query_with_rollback(sql_query, data, db_conn, db_cursor):
+def _execute_query_with_rollback(sql_query: str, data: list, db_conn, db_cursor):
     try:
         db_cursor.execute(sql_query, data)
         db_conn.commit()
@@ -119,7 +118,7 @@ def _execute_query_with_rollback(sql_query, data, db_conn, db_cursor):
 
 
 # Execute sql query.
-def _execute_query(sql_query, data, db_conn, db_cursor):
+def _execute_query(sql_query: str, data: list, db_cursor):
     try:
         db_cursor.execute(sql_query, data)
         return db_cursor
@@ -135,23 +134,23 @@ def _execute_query(sql_query, data, db_conn, db_cursor):
 
 
 # Get all listing keys from database and return the keys.
-def get_listingkeys_db(db_conn, db_cursor):
-    ListingKeys = {}
-    sql_query = '''SELECT ListingKey FROM property'''
-    data = []
-    db_result_cursor = _execute_query(sql_query, data, db_conn, db_cursor)
+def get_listingkeys_db(db_cursor) -> dict:
+    listingkeys: dict = {}
+    sql_query: str = 'SELECT ListingKey FROM property'
+    data: list = []
+    db_result_cursor = _execute_query(sql_query, data, db_cursor)
     if db_result_cursor is not None:
-        ListingKeys = {i[0]: int(ListingState.DEFAULT) for i in
+        listingkeys = {i[0]: int(ListingState.DEFAULT) for i in
                        db_result_cursor.fetchall()}
-    return ListingKeys
+    return listingkeys
 
 
 # Get all media data from database and return the dictionary.
-def get_media_db(db_conn, db_cursor):
-    media = {}
-    sql_query = '''SELECT * FROM media'''
-    data = []
-    db_result_cursor = _execute_query(sql_query, data, db_conn, db_cursor)
+def get_media_db(db_cursor) -> dict:
+    media: dict = {}
+    sql_query: str = 'SELECT * FROM media'
+    data: list = []
+    db_result_cursor = _execute_query(sql_query, data, db_cursor)
     if db_result_cursor is not None:
         for i in db_result_cursor.fetchall():
             if i[1] in media:
@@ -163,6 +162,6 @@ def get_media_db(db_conn, db_cursor):
 
 # Delete the property table entry with given ListingKey.
 def delete_table_data(listingkey, db_conn, db_cursor):
-    sql_query = '''DELETE FROM property WHERE ListingKey = %s'''
-    data = (listingkey,)
+    sql_query: str = 'DELETE FROM property WHERE ListingKey = %s'
+    data: list = [listingkey]
     _execute_query_with_rollback(sql_query, data, db_conn, db_cursor)

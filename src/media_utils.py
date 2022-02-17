@@ -1,7 +1,7 @@
-import db_utils
+import src.db_utils as db_utils
 import os
 import requests
-import dateutil.parser as DP
+import dateutil.parser as dp
 
 path_to_download = "./media/"
 
@@ -9,7 +9,7 @@ path_to_download = "./media/"
 # Convert iso format to datetime.
 def _iso_to_time(time_str):
     timestamp = time_str[:-1]
-    parsed_time = DP.parse(timestamp)
+    parsed_time = dp.parse(timestamp)
     return parsed_time
 
 
@@ -26,8 +26,8 @@ def _check_modification_time(media, media_db):
         media_db[4] = int(db_utils.ListingState.NO_CHANGE)
 
 
-def _create_media(media, listingKey):
-    return [media["MediaKey"], listingKey, media["MediaURL"],
+def _create_media(media, listingkey):
+    return [media["MediaKey"], listingkey, media["MediaURL"],
             media["MediaModificationTimestamp"],
             int(db_utils.ListingState.NEW)]
 
@@ -111,8 +111,8 @@ def _delete_photo(media):
     file_name = file_dir + media[2].rpartition('/')[-1] + '.jpeg'
     if os.path.exists(file_name):
         os.remove(file_name)
-    dir = os.listdir(file_dir)
-    if len(dir) == 0:
+    directory = os.listdir(file_dir)
+    if len(directory) == 0:
         os.rmdir(file_dir)
 
 
