@@ -8,7 +8,7 @@ Incremental pulls run every hour once the full pull is done. The incremental run
 ## Note:
 > The full dataset takes a while to download.
 > There are several improvements that can be made, but this is the general approach to getting data; for example you may want to download photos as you insert properties into the database, or you may process photos separately.
-#Usage:
+# Usage:
 >Get all the listings for the publisher with the provided client-id and client-secret.
 >- ./get_listings_data.py -i &lt;client-id&gt; -s &lt;client-secret&gt;
 
