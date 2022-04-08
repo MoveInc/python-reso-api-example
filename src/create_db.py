@@ -1,12 +1,12 @@
-import mysql.connector
-from mysql.connector import errorcode
+from errno import errorcode
+import pymysql
 
 
 # create database.
 def _create_database(cursor, opts: dict):
     try:
         cursor.execute('create database ' + opts["db_name"])
-    except mysql.connector.Error as err:
+    except pymysql.Error as err:
         print("Failed creating database: {}".format(err))
         exit(1)
 
@@ -54,44 +54,42 @@ def _create_tables(cursor):
                         'property(ListingKey))')
         cursor.execute(create_property)
         cursor.execute(create_media)
-    except mysql.connector.Error as err:
-        if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
+    except pymysql.Error as err:
+        if type(err) is pymysql.err.OperationalError:
             print("Tables already exist.")
         else:
-            print(err.msg)
+            print(err)
     else:
         print("OK")
 
 
 # Create a database and the tables. Name of database can be changed by
 # assigning value to the global variable DB_NAME.
-def create_db(opts: dict):
-    db_connection = mysql.connector.connect(user='root', password='root')
-    cursor = db_connection.cursor()
-    try:
-        cursor.execute('USE ' + opts["db_name"])
-    except mysql.connector.Error as err:
-        print("Database {} does not exists.".format(opts["db_name"]))
-        if err.errno == errorcode.ER_BAD_DB_ERROR:
-            _create_database(cursor, opts)
-            print("Database {} created successfully.".format(opts["db_name"]))
-            db_connection.database = opts["db_name"]
-        else:
-            print(err)
-            exit(1)
-    _create_tables(cursor)
-    cursor.close()
-    db_connection.close()
+def create_db(opts: dict, db_connection):
+    with db_connection.cursor() as cursor:
+        try:
+            cursor.execute('USE ' + opts["db_name"])
+        except pymysql.Error as err:
+            print("Database {} does not exists.".format(opts["db_name"]))
+            if type(err) is pymysql.err.OperationalError:
+                _create_database(cursor, opts)
+                print("Database {} created successfully.".format(opts["db_name"]))
+                db_connection.database = opts["db_name"]
+            else:
+                print(err)
+        _create_tables(cursor)
+        cursor.close()
 
 
 # Connect to the database and return the db connector and cursor.
 def connect_db(opts: dict):
     try:
-        db_connection = mysql.connector.connect(user='root', password='root')
-        cursor = db_connection.cursor()
+        connection = pymysql.connect(user='root', password='root')
+        with connection.cursor() as cursor:
+            cursor.execute('USE ' + opts["db_name"])
         print(f"DB NAME {opts['db_name']}")
-        cursor.execute('USE ' + opts["db_name"])
-        return db_connection, cursor
-    except mysql.connector.Error as err:
-        print("Failed creating database: {}".format(err))
-        exit(1)
+        return connection
+    except pymysql.err.OperationalError as err:
+        create_db(opts, connection)
+        print("No database named {}".format(err))
+        return connection

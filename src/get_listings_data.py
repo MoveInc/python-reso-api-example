@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 from optparse import OptionParser
-import src.create_db as create_db
-from src.db_utils import keys, get_listingkeys_db
-import src.helper_utils as helper_utils
+import create_db as create_db
+from db_utils import keys, get_listingkeys_db
+import helper_utils as helper_utils
 from datetime import datetime, timedelta
 from time import sleep
 
@@ -64,31 +64,34 @@ def main() -> None:
     opts["download_photos"] = True if photos.upper().startswith("T") else False
     last_pull = datetime.now()
 
-    create_db.create_db(opts)
+    conn = create_db.connect_db(opts)
+    create_db.create_db(opts, conn)
+    conn.close()
 
     # First pull will always be a full
     first_pull = True
     while True:
-        db_conn, db_cursor = create_db.connect_db(opts)
-        access_token = helper_utils.authenticate(opts["client_id"], opts["client_secret"])
-        try:
-            if (datetime.now() - last_pull) > timedelta(1) or first_pull is True:
-                print("Full pull started at " + time_incremental_cursor)
-                full_pull(access_token, db_conn, db_cursor, opts)
-                last_pull = datetime.utcnow()
-                print("Full pull finished!!")
-                sleep(60 * 60)
-                first_pull = False
-                db_conn.close()
-            else:
-                print("Incremental run started at " + helper_utils.get_current_time_iso())
-                incremental_run(access_token, db_conn, db_cursor, opts)
-                print("Incremental run finished!!")
-                sleep(60 * 60)
-                db_conn.close()
-        except KeyboardInterrupt:
-            print('Manual break by user')
-            return
+        db_conn = create_db.connect_db(opts)
+        with db_conn.cursor() as db_cursor:
+            access_token = helper_utils.authenticate(opts["client_id"], opts["client_secret"])
+            try:
+                if (datetime.now() - last_pull) > timedelta(1) or first_pull is True:
+                    print("Full pull started at " + time_incremental_cursor)
+                    full_pull(access_token, db_conn, db_cursor, opts)
+                    last_pull = datetime.utcnow()
+                    print(f"Full pull finished {datetime.now()}!!")
+                    sleep(60 * 60)
+                    first_pull = False
+                    db_conn.close()
+                else:
+                    print("Incremental run started at " + helper_utils.get_current_time_iso())
+                    incremental_run(access_token, db_conn, db_cursor, opts)
+                    print("Incremental run finished!!")
+                    sleep(60 * 60)
+                    db_conn.close()
+            except KeyboardInterrupt:
+                print('Manual break by user')
+                return
 
 
 if __name__ == "__main__":

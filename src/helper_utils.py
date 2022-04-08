@@ -1,8 +1,8 @@
 import os
 
 import requests
-import src.media_utils as media_utils
-import src.db_utils as db_utils
+import media_utils as media_utils
+import db_utils as db_utils
 from datetime import datetime, timezone
 
 
@@ -89,6 +89,7 @@ def get_properties(url: str, access_token: str, listingkey_db, opts: dict, db_co
         count += len(properties)
         parse_listings(properties, listingkey_db, full, db_conn, db_cursor, opts)
         print("Total properties processed: " + str(count))
+        properties = {}
         if url == "":
             break
 

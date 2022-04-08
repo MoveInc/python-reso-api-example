@@ -1,4 +1,4 @@
-import src.db_utils as db_utils
+import db_utils as db_utils
 import os
 import requests
 import dateutil.parser as dp

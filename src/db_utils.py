@@ -1,4 +1,4 @@
-import mysql.connector
+import pymysql.cursors
 from enum import IntEnum
 
 keys = ("ListingKey", "ListingId", "ModificationTimestamp", "PropertyType",
@@ -104,15 +104,15 @@ def _execute_query_with_rollback(sql_query: str, data: list, db_conn, db_cursor)
     try:
         db_cursor.execute(sql_query, data)
         db_conn.commit()
-    except (mysql.connector.IntegrityError, mysql.connector.DataError) as err:
+    except (pymysql.IntegrityError, pymysql.DataError) as err:
         print("DataError or IntegrityError")
         print(err)
         db_conn.rollback()
-    except mysql.connector.ProgrammingError as err:
+    except pymysql.ProgrammingError as err:
         print("Programming Error")
         print(err)
         db_conn.rollback()
-    except mysql.connector.Error as err:
+    except pymysql.Error as err:
         print(err)
         db_conn.rollback()
 
@@ -122,13 +122,13 @@ def _execute_query(sql_query: str, data: list, db_cursor):
     try:
         db_cursor.execute(sql_query, data)
         return db_cursor
-    except (mysql.connector.IntegrityError, mysql.connector.DataError) as err:
+    except (pymysql.IntegrityError, pymysql.DataError) as err:
         print("DataError or IntegrityError")
         print(err)
-    except mysql.connector.ProgrammingError as err:
+    except pymysql.ProgrammingError as err:
         print("Programming Error")
         print(err)
-    except mysql.connector.Error as err:
+    except pymysql.Error as err:
         print(err)
     return None
 
