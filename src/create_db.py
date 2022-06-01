@@ -63,8 +63,8 @@ def _create_tables(cursor):
         print("OK")
 
 
-# Create a database and the tables. Name of database can be changed by
-# assigning value to the global variable DB_NAME.
+# Create a database and the tables. Name of database can be changed
+# from args passed in or env var.
 def create_db(opts: dict, db_connection):
     with db_connection.cursor() as cursor:
         try:
@@ -84,12 +84,11 @@ def create_db(opts: dict, db_connection):
 # Connect to the database and return the db connector and cursor.
 def connect_db(opts: dict):
     try:
-        connection = pymysql.connect(user='root', password='root')
+        connection = pymysql.connect(user=opts['db_user'], password=opts['db_password'], port=3306)
         with connection.cursor() as cursor:
             cursor.execute('USE ' + opts["db_name"])
         print(f"DB NAME {opts['db_name']}")
         return connection
     except pymysql.err.OperationalError as err:
         create_db(opts, connection)
-        print("No database named {}".format(err))
         return connection

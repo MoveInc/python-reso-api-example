@@ -1,14 +1,25 @@
 import os
+import responses
 import unittest
-import src.helper_utils as helper_utils
+
+import helper_utils as helper_utils
 
 
 class TestHelperUtils(unittest.TestCase):
+    @responses.activate
     def test_authenticate(self):
+        responses.add(responses.POST, 'https://api.listhub.com/oauth2/token', json={'access_token': 'ImAKey'},
+                      status=200)
         auth_key = helper_utils.authenticate("public_sandbox", "public_sandbox")
         self.assertTrue(auth_key != "")
 
+    @responses.activate
     def test_get_properties(self):
+        responses.add(responses.POST, 'https://api.listhub.com/oauth2/token',
+                      json={'access_token': 'ImAKey'}, status=200)
+        responses.add(responses.GET, 'https://api.listhub.com/odata/Property?$top=1&$select=ListingKey',
+                      json={"value": [{"ListingKey": "FAKE"}]}, status=200)
+
         auth_key = helper_utils.authenticate("public_sandbox", "public_sandbox")
         props = helper_utils._get_data("https://api.listhub.com/odata/Property?$top=1&$select=ListingKey", {}, auth_key)
         self.assertTrue(props != tuple())

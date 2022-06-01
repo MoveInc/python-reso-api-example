@@ -7,15 +7,31 @@ Incremental pulls run every hour once the full pull is done. The incremental run
 >- The script will download 500 listings at a time and insert them into the db. After all data is inserted/updated the photos will download if the script has been told to do so.
 ## Note:
 >- The full dataset takes a while to download.
->- You will need mysql running, by default the database uses username=root password=root and can be changed in src/create_db.py 
+>- You will need mysql running, by default the database uses username=root password=root and can be changed in src/create_db.py
+>  * The attached docker-compose.yml can be used to act as the database, it is not persistent.
 >- There are several improvements that can be made, but this is the general approach to getting data; for example you may want to download photos as you insert properties into the database, or you may process photos separately.
 # Usage:
 >Get all the listings for the publisher with the provided client-id and client-secret.
->- ./get_listings_data.py -i &lt;client-id&gt; -s &lt;client-secret&gt;
+>- ./get_listings_data.py -i &lt;client-id&gt; -s &lt;client-secret&gt; -d &lt;database-name&gt; -u &lt;database-username&gt; -c &lt;database-password&gt; -p &lt;download-photos&gt;
+>- ### Required arguments
+>- -i / --id
+>   * publisher id
+>- -s / --secret
+>   * publisher secret
+>- -d / --database
+>   * database name
+>- -u / --db_user
+>   * database user
+>- -c / --db_password
+>   * database password
+>- -p / --photos
+>   * download photos True/False
 
 #### Example:
->- ./get_listings_data.py -i "public_sandbox" -s "public_sandbox"
+>- docker-compose up -d
+>- ./get_listings_data.py -i public_sandbox -s public_sandbox -d testing -u root -c root -p False
 - Running this starts a loop that will download a full data set from the api, then every hour after will download an incremental until a day has passed. After a day has passed the full will run again. The full deletes old listings, incrementals do not.
 >- Running tests
-- python3 -m unittest discover -s tests -p 'test*.py'
+- cd src/
+- python3 -m unittest discover -s ../tests -p 'test*.py'
 ## Documentation on how to query and use the API can be found at <a href="https://api.listhub.com">api.listhub.com</a>

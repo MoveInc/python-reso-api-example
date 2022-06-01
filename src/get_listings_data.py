@@ -8,8 +8,8 @@ from time import sleep
 
 
 time_incremental_cursor: str = helper_utils.get_current_time_iso()
-base_url: str = "https://api.listhub.com/odata/Property?$select=Media,"
-select: str = ",".join([x for x in keys if x != "LeadRoutingEmail"]) + ",CustomFields"
+base_url: str = "https://api.listhub.com/odata/Property?$select=Media,CustomFields,"
+select: str = ",".join([x for x in keys if x != "LeadRoutingEmail"])
 
 
 def get_and_reset_time() -> str:
@@ -48,6 +48,8 @@ def parse_args() -> dict:
     parser.add_option("-i", "--id", dest="client_id", help="read listings for Client ID")
     parser.add_option("-s", "--secret", dest="client_secret", help="Secret for Client ID")
     parser.add_option("-d", "--database", dest="db_name", help="Name of the database")
+    parser.add_option("-u", "--db_user", dest="db_user", help="Database username")
+    parser.add_option("-c", "--db_password", dest="db_password", help="Database password")
     parser.add_option("-p", "--photos", dest="download_photos", help="True or False downloads photos")
 
     (options, args) = parser.parse_args()
@@ -56,10 +58,8 @@ def parse_args() -> dict:
 
 def main() -> None:
     opts = parse_args()
-    print(opts)
-    opts["client_id"] = helper_utils.parse_arg(opts, "client_id")
-    opts["client_secret"] = helper_utils.parse_arg(opts, "client_secret")
-    opts["db_name"] = helper_utils.parse_arg(opts, "db_name")
+    helper_utils.ensure_args(opts)
+    # Ensure download_photos arg is a bool
     photos = helper_utils.parse_arg(opts, "download_photos")
     opts["download_photos"] = True if photos.upper().startswith("T") else False
     last_pull = datetime.now()

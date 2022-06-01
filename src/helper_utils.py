@@ -57,26 +57,28 @@ def _update_media(listingkey: str, media_db: dict, db_conn, db_cursor) -> None:
 # Get properties in a results page and return the next link and properties.
 def _get_data(url: str, properties: dict, access_token: str) -> tuple:
     headers = {"Authorization": "Bearer " + access_token}
-    request = requests.get(url, headers=headers)
-    # If request fails for some reason try a couple more times before giving up.
-    if request is None:
-        tries = 1
-        while request is None and tries < 5:
-            print("Tries: " + str(tries))
-            request = requests.get(url, headers)
-            tries += 1
-    if request is not None:
-        response = request.json()
-    else:
-        raise ConnectionError("Could not get data from API")
-
-    for reso_property in response["value"]:
-        properties.update({reso_property["ListingKey"]: reso_property})
+    tries = 1
     try:
-        next_link = response["@odata.nextLink"]
-    except KeyError:
-        next_link = ""
-    return next_link, properties
+        request = requests.get(url, headers=headers)
+        # If request fails for some reason try a couple more times before giving up.
+        if request is None:
+            while request is None and tries < 5:
+                print("Tries: " + str(tries))
+                request = requests.get(url, headers)
+        if request is not None:
+            response = request.json()
+            for reso_property in response["value"]:
+                properties.update({reso_property["ListingKey"]: reso_property})
+            try:
+                next_link = response["@odata.nextLink"]
+            except KeyError:
+                next_link = ""
+            return next_link, properties
+        else:
+            raise ConnectionError("Could not get data from API")
+    except ConnectionError:
+        # If request is none, or request.get errors retry
+        tries += 1
 
 
 # Iterate through the next links till the last one.
@@ -129,3 +131,9 @@ def parse_arg(args: dict, arg: str) -> str:
         raise EnvironmentError(f"{arg} is not present in options or the environment.")
 
     return value
+
+
+def ensure_args(opts: dict):
+    required_opts = ["client_id", "client_secret", "db_name", "db_user", "db_password", "download_photos"]
+    for i in required_opts:
+        parse_arg(opts, i)
