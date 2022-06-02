@@ -125,6 +125,7 @@ def parse_listings(properties: dict, listings_db, is_full_pull: bool, db_conn, d
     _update_db(properties, listings_db, media_db, db_conn, db_cursor)
 
     if opts.get("download_photos"):
+        print("Downloading Photos")
         media_utils.handle_photos(media_db)
 
 

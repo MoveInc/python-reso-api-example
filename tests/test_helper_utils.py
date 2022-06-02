@@ -2,7 +2,7 @@ import os
 import responses
 import unittest
 
-import helper_utils as helper_utils
+import helper_utils
 
 
 class TestHelperUtils(unittest.TestCase):
