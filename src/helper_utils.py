@@ -1,4 +1,5 @@
 import os
+from time import sleep
 
 import requests
 import media_utils as media_utils
@@ -54,31 +55,38 @@ def _update_media(listingkey: str, media_db: dict, db_conn, db_cursor) -> None:
                 db_utils.delete_media(media, db_conn, db_cursor)
 
 
+# Attempts request, retries on exception or None
+def _attempt_request(url: str, headers: dict):
+    tries = 1
+    while tries < 5:
+        try:
+            req = requests.get(url, headers=headers)
+            if req is not None:
+                return req
+        except ConnectionError:
+            print("Connection error", url)
+        sleep(1)
+        tries += 1
+        print(f"Retry: {tries}")
+    print("Failed to get data from the API.")
+    return None
+
+
 # Get properties in a results page and return the next link and properties.
 def _get_data(url: str, properties: dict, access_token: str) -> tuple:
     headers = {"Authorization": "Bearer " + access_token}
-    tries = 1
-    try:
-        request = requests.get(url, headers=headers)
-        # If request fails for some reason try a couple more times before giving up.
-        if request is None:
-            while request is None and tries < 5:
-                print("Tries: " + str(tries))
-                request = requests.get(url, headers)
-        if request is not None:
-            response = request.json()
-            for reso_property in response["value"]:
-                properties.update({reso_property["ListingKey"]: reso_property})
-            try:
-                next_link = response["@odata.nextLink"]
-            except KeyError:
-                next_link = ""
-            return next_link, properties
-        else:
-            raise ConnectionError("Could not get data from API")
-    except ConnectionError:
-        # If request is none, or request.get errors retry
-        tries += 1
+    request = _attempt_request(url, headers)
+    if request is not None:
+        response = request.json()
+        for reso_property in response["value"]:
+            properties.update({reso_property["ListingKey"]: reso_property})
+        try:
+            next_link = response["@odata.nextLink"]
+        except KeyError:
+            next_link = ""
+        return next_link, properties
+    else:
+        raise ConnectionError("Could not get data from API")
 
 
 # Iterate through the next links till the last one.
