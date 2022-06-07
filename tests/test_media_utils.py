@@ -8,15 +8,6 @@ import db_utils
 
 class TestHelperUtils(unittest.TestCase):
     @responses.activate
-    def test_download_and_delete_photo(self):
-        responses.add(responses.GET, 'https://google.com/test', body=b"{'photo': 'ImAPic'}", status=200)
-        media = ["test", "test", "https://google.com/test"]
-        media_utils._download_photo(media)
-        self.assertTrue(os.path.exists("./media/test/test.jpeg"))
-        media_utils._delete_photo(media)
-        self.assertFalse(os.path.exists("./media/test/"))
-
-    @responses.activate
     def test_parse_media(self):
         responses.add(responses.GET, 'https://google.com/test.jpg', body=b"{'photo': 'ImAPic'}", status=200)
         media_db = {

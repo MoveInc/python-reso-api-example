@@ -24,7 +24,7 @@ def full_pull(access_token: str, db_conn: str, db_cursor: str, opts: dict) -> No
     get_and_reset_time()
     # Final url for pull is base url + the select statement
     url = base_url + select
-    begin(access_token, db_conn, db_cursor, opts, url, opts["download_photos"])
+    begin(access_token, db_conn, db_cursor, opts, url, True)
 
 
 # Begins the incremental run process, only updates listings
@@ -50,7 +50,6 @@ def parse_args() -> dict:
     parser.add_option("-d", "--database", dest="db_name", help="Name of the database")
     parser.add_option("-u", "--db_user", dest="db_user", help="Database username")
     parser.add_option("-c", "--db_password", dest="db_password", help="Database password")
-    parser.add_option("-p", "--photos", dest="download_photos", help="True or False downloads photos")
 
     (options, args) = parser.parse_args()
     return vars(options)
@@ -59,9 +58,6 @@ def parse_args() -> dict:
 def main() -> None:
     opts = parse_args()
     helper_utils.ensure_args(opts)
-    # Ensure download_photos arg is a bool
-    photos = helper_utils.parse_arg(opts, "download_photos")
-    opts["download_photos"] = True if photos.upper().startswith("T") else False
     last_pull = datetime.now()
 
     conn = create_db.connect_db(opts)

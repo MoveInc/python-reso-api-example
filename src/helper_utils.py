@@ -106,7 +106,7 @@ def get_properties(url: str, access_token: str, listingkey_db, opts: dict, db_co
 
 # Iterate through the properties and listings from the database. Compare
 # them and create, append or update the listings_db with the new or updated
-# properties. Create media and call handle photos to update photos.
+# properties and create media.
 def parse_listings(properties: dict, listings_db, is_full_pull: bool, db_conn, db_cursor, opts: dict) -> None:
     media_db = db_utils.get_media_db(db_cursor)
     for listingKey in listings_db:
@@ -124,10 +124,6 @@ def parse_listings(properties: dict, listings_db, is_full_pull: bool, db_conn, d
     print("Updating Database")
     _update_db(properties, listings_db, media_db, db_conn, db_cursor)
 
-    if opts.get("download_photos"):
-        print("Downloading Photos")
-        media_utils.handle_photos(media_db)
-
 
 # Parses a single argument from the args; if it cannot be found
 # it will try to find it in the environment variables else raise error.
@@ -143,6 +139,6 @@ def parse_arg(args: dict, arg: str) -> str:
 
 
 def ensure_args(opts: dict):
-    required_opts = ["client_id", "client_secret", "db_name", "db_user", "db_password", "download_photos"]
+    required_opts = ["client_id", "client_secret", "db_name", "db_user", "db_password"]
     for i in required_opts:
         parse_arg(opts, i)
