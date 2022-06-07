@@ -10,8 +10,6 @@ pull is run.
   database. Incremental pulls run every hour once the full pull is done. The
   incremental run only updates listings.
 - The script will download 500 listings at a time and insert them into the db.
-  After all data is inserted/updated the photos will download if the script has
-  been told to do so.
 
 ## Note
 
@@ -21,8 +19,7 @@ pull is run.
   - The attached `docker-compose.yml` can be used to act as the database, it is
     not persistent.
 - There are several improvements that can be made, but this is the general
-  approach to getting data; for example you may want to download photos as you
-  insert properties into the database, or you may process photos separately.
+  approach to getting data.
 
 ## Usage:
 
@@ -30,7 +27,7 @@ Get all the listings for the publisher with the provided client-id and
 client-secret.
 
 ```bash
-./get_listings_data.py -i <client-id> -s <client-secret> -d <database-name> -u <database-username> -c <database-password> -p <download-photos>
+./get_listings_data.py -i <client-id> -s <client-secret> -d <database-name> -u <database-username> -c <database-password>
 ```
 
 ### Required arguments
@@ -40,13 +37,13 @@ client-secret.
 - `-d` /`--database`: database name
 - `-u` / `--db_user`: database user
 - `-c` / `--db_password`: database password
-- `-p` / `--photos`: download photos True/False
 
 #### Example:
 
 ```bash
 docker-compose up -d
-./get_listings_data.py -i public_sandbox -s public_sandbox -d testing -u root -c root -p False
+cd src/
+./get_listings_data.py -i public_sandbox -s public_sandbox -d testing -u root -c root
 ```
 
 Running this starts a loop that will download a full data set from the api, then
