@@ -1,49 +1,65 @@
 #!/usr/bin/env python3
-from optparse import OptionParser
-import create_db as create_db
-from db_utils import keys, get_listingkeys_db
-import helper_utils as helper_utils
+
+import os
 from datetime import datetime, timedelta
+from optparse import OptionParser
 from time import sleep
 
+from pymysql.connections import Connection
+
+import db_utils
+import helper_utils
+from data_utils import PROPERTY_COLUMNS
+
+BASE_URL: str = "https://api.listhub.com/odata/Property?$select=Media,CustomFields,"
+SELECT_FIELDS: str = ",".join([x for x in PROPERTY_COLUMNS if x != "LeadRoutingEmail"])
 
 time_incremental_cursor: str = helper_utils.get_current_time_iso()
-base_url: str = "https://api.listhub.com/odata/Property?$select=Media,CustomFields,"
-select: str = ",".join([x for x in keys if x != "LeadRoutingEmail"])
 
 
-def get_and_reset_time() -> str:
+def _get_and_reset_time() -> str:
     global time_incremental_cursor
     last_access_time: str = time_incremental_cursor
     time_incremental_cursor = helper_utils.get_current_time_iso()
     return last_access_time
 
 
-# Begins a full dataset pull, updates and deletes listings
-def full_pull(access_token: str, db_conn: str, db_cursor: str, opts: dict) -> None:
-    get_and_reset_time()
-    # Final url for pull is base url + the select statement
-    url = base_url + select
-    begin(access_token, db_conn, db_cursor, opts, url, True)
+def _full_pull(access_token: str, connection: Connection, options: dict) -> bool:
+    """Begins a full dataset pull and updates and deletes listings."""
+    print(f"Full pull started at: {helper_utils.get_current_time_iso()}")
+
+    _get_and_reset_time()
+
+    # Final url for pull is base url + the select fields
+    url: str = BASE_URL + SELECT_FIELDS
+
+    success: bool = helper_utils.get_properties(url, access_token, connection, options, True)
+
+    print(f"Full pull finished: {helper_utils.get_current_time_iso()}")
+
+    return success
 
 
-# Begins the incremental run process, only updates listings
-def incremental_run(access_token: str, db_conn: str, db_cursor: str, opts: dict) -> None:
-    last_access_time = get_and_reset_time()
-    # Final url for pull is base url + the select statement + the query (filter by timestamp)
-    url_query = "&$filter=ModificationTimestamp gt " + last_access_time
-    url = base_url + select + url_query
-    begin(access_token, db_conn, db_cursor, opts, url)
+def _incremental_pull(access_token: str, connection: Connection, options: dict) -> bool:
+    """Begins an incremental dataset pull and only updates listings."""
+    print(f"Incremental pull started at: {helper_utils.get_current_time_iso()}")
+
+    last_access_time: str = _get_and_reset_time()
+
+    # Final url for pull is base url + the select fields + the timestamp filter
+    url_query: str = f"&$filter=ModificationTimestamp gt {last_access_time}"
+    url: str = BASE_URL + SELECT_FIELDS  + url_query
+
+    success: bool = helper_utils.get_properties(url, access_token, connection, options)
+
+    print(f"Incremental pull finished: {helper_utils.get_current_time_iso()}")
+
+    return success
 
 
-def begin(access_token: str, db_conn: str, db_cursor: str, opts: dict, url: str, full: bool = False) -> None:
-    listingkey_db = get_listingkeys_db(db_cursor)
-    helper_utils.get_properties(url, access_token, listingkey_db, opts, db_conn, db_cursor, full)
-
-
-# Parses the arguments passed in to the program into a dict.
-def parse_args() -> dict:
-    usage = "usage: %prog [options] arg"
+def _parse_args() -> dict[str, str]:
+    """Parses the arguments passed in to the program into a dict."""
+    usage: str = "usage: %prog [options] arg"
     parser = OptionParser(usage)
     parser.add_option("-i", "--id", dest="client_id", help="read listings for Client ID")
     parser.add_option("-s", "--secret", dest="client_secret", help="Secret for Client ID")
@@ -51,43 +67,65 @@ def parse_args() -> dict:
     parser.add_option("-u", "--db_user", dest="db_user", help="Database username")
     parser.add_option("-c", "--db_password", dest="db_password", help="Database password")
 
-    (options, args) = parser.parse_args()
+    options, _ = parser.parse_args()
     return vars(options)
 
 
-def main() -> None:
-    opts = parse_args()
-    helper_utils.ensure_args(opts)
-    last_pull = datetime.now()
+def _ensure_arg(args: dict[str, str], key: str) -> str:
+    """
+    Ensures an argument exists in args or the environment otherwise raises an error.
+    """
+    value: str = args.get(key) or os.environ.get(key)
+    if not value:
+        raise EnvironmentError(f"Required option '{key}' is not set in options or the environment.")
 
-    conn = create_db.connect_db(opts)
-    create_db.create_db(opts, conn)
-    conn.close()
+    return value
+
+
+def _ensure_args(options: dict[str, str]):
+    required_options: list[str] = ["client_id", "client_secret", "db_name", "db_user", "db_password"]
+    for key in required_options:
+        options[key] = _ensure_arg(options, key)
+
+
+def main() -> None:
+    options: dict[str, str] = _parse_args()
+    _ensure_args(options)
 
     # First pull will always be a full
-    first_pull = True
+    first_pull: bool = True
+    last_pull: datetime = datetime.now()
+
+    db_name: str = options["db_name"]
+    db_user: str = options["db_user"]
+    db_password: str = options["db_password"]
+
     while True:
-        db_conn = create_db.connect_db(opts)
-        with db_conn.cursor() as db_cursor:
-            access_token = helper_utils.authenticate(opts["client_id"], opts["client_secret"])
-            try:
-                if (datetime.now() - last_pull) > timedelta(1) or first_pull is True:
-                    print("Full pull started at " + time_incremental_cursor)
-                    full_pull(access_token, db_conn, db_cursor, opts)
-                    last_pull = datetime.utcnow()
-                    print(f"Full pull finished {datetime.now()}!!")
-                    sleep(60 * 60)
-                    first_pull = False
-                    db_conn.close()
-                else:
-                    print("Incremental run started at " + helper_utils.get_current_time_iso())
-                    incremental_run(access_token, db_conn, db_cursor, opts)
-                    print("Incremental run finished!!")
-                    sleep(60 * 60)
-                    db_conn.close()
-            except KeyboardInterrupt:
-                print('Manual break by user')
+        connection: Connection = db_utils.get_db_connection(db_name, db_user, db_password)
+        if not connection:
+            print(f"Unable to get a connection to the database {db_name}")
+            break
+
+        success: bool = False
+        access_token: str = helper_utils.authenticate(options["client_id"], options["client_secret"])
+        try:
+            if first_pull or ((datetime.now() - last_pull) > timedelta(1)):
+                success = _full_pull(access_token, connection, options)
+                connection.close()
+
+                first_pull = False
+            else:
+                success = _incremental_pull(access_token, connection, options)
+                connection.close()
+
+            if not success:
                 return
+
+            last_pull = datetime.now()
+            sleep(60 * 60)
+        except KeyboardInterrupt:
+            print('Manual break by user')
+            return
 
 
 if __name__ == "__main__":
