@@ -15,7 +15,7 @@ from data_utils import ListingState
 def get_current_time_iso() -> str:
     """Get current UTC time and convert to the ISO format."""
     time = datetime.now(tz=timezone.utc)
-    return time.isoformat()[:-3] + 'Z'
+    return time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
 
 def authenticate(client_id: str, client_secret: str) -> str:
