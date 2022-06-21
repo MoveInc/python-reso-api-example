@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from time import sleep
 from typing import Any, Optional
+from retry import retry
 
 import requests
 import pymysql
@@ -66,23 +67,17 @@ def _update_media(listing_key: str, medias: dict[str, list[Any]], cursor: Cursor
             data_utils.update_media(media, cursor)
 
 
-# TODO: Should we use a retry library here instead
+@retry(ConnectionError, tries=5, delay=2)
 def _attempt_request(url: str, headers: dict) -> Optional[requests.Response]:
     """Attempts request with retries on exception."""
-    tries = 1
-    while tries < 5:
-        try:
-            response = requests.get(url, headers=headers)
-            if response:
-                return response
-        except ConnectionError as err:
-            print(f"Connection error: {err}")
+    try:
+        response = requests.get(url, headers=headers)
+        if response:
+            return response
+    except ConnectionError as err:
+        print(f"Connection error: {err}")
+        raise err
 
-        sleep(1)
-        tries += 1
-        print(f"Retry: {tries}")
-
-    print("Failed to get data from the API.")
     return None
 
 

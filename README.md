@@ -42,6 +42,7 @@ client-secret.
 
 ```bash
 docker-compose up -d
+pip3 install -r requirements.txt
 cd src/
 ./get_listings_data.py -i public_sandbox -s public_sandbox -d testing -u root -c root
 ```
