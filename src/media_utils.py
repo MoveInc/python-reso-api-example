@@ -1,91 +1,91 @@
-import db_utils as db_utils
-import os
-import requests
-import dateutil.parser as dp
+from collections import defaultdict
+from datetime import datetime
+from typing import Any
 
-path_to_download = "./media/"
+import dateutil.parser as dateutil_parser
 
+from data_utils import ListingState
 
-# Convert iso format to datetime.
-def _iso_to_time(time_str):
-    timestamp = time_str[:-1]
-    parsed_time = dp.parse(timestamp)
-    return parsed_time
+PATH_TO_DOWNLOAD = "./media/"
 
 
-# Compare media and media from database using the modification timestamp
-# and update the status
-def _check_modification_time(media, media_db):
-    media_modified_time = _iso_to_time(media["MediaModificationTimestamp"])
-    media_db_modified_time = _iso_to_time(media_db[3])
-    if media_modified_time > media_db_modified_time:
-        media_db[2] = media["MediaURL"]
-        media_db[3] = media["MediaModificationTimestamp"]
-        media_db[4] = int(db_utils.ListingState.UPDATE)
+def _iso_to_time(time_str: str) -> datetime:
+    """Convert iso format to datetime."""
+    timestamp: str = time_str[:-1]
+    return dateutil_parser.parse(timestamp)
+
+
+def _update_if_new(api_media: dict[str, Any], db_media: list[Any]) -> None:
+    """Update existing media from database if API media is newer."""
+    new_media_modified_time = _iso_to_time(api_media["MediaModificationTimestamp"])
+    db_media_modified_time = _iso_to_time(db_media[3])
+    if new_media_modified_time > db_media_modified_time:
+        db_media[2] = api_media["MediaURL"]
+        db_media[3] = api_media["MediaModificationTimestamp"]
+        db_media[4] = int(ListingState.UPDATE)
     else:
-        media_db[4] = int(db_utils.ListingState.NO_CHANGE)
+        db_media[4] = int(ListingState.NO_CHANGE)
 
 
-def _create_media(media, listingkey):
-    return [media["MediaKey"], listingkey, media["MediaURL"],
-            media["MediaModificationTimestamp"],
-            int(db_utils.ListingState.NEW)]
+def _create_media(media: dict[str, list[Any]], listing_key: str) -> list[Any]:
+    return [
+        media["MediaKey"],
+        listing_key,
+        media["MediaURL"],
+        media["MediaModificationTimestamp"],
+        int(ListingState.NEW)
+    ]
 
 
-# Combine two dictionaries and copy the new ones to the source.
-def _merge_media(media_db, new_media):
-    for listingKey in new_media:
-        for media in new_media[listingKey]:
-            media_db[listingKey].append(media)
+def _merge_media(db_medias: dict[str, list[Any]], new_media: dict[str, Any]) -> None:
+    """Copy the new media in the existing medias."""
+    for listing_key in new_media:
+        for media in new_media[listing_key]:
+            db_medias[listing_key].append(media)
 
 
-# Parse the properties and modify the media status from database
-# by comparing the values present in the database.
-# Based on the parsing results, the media is divided into,
-# values to be DELETED, ADDED and MODIFIED in the database.
-def parse_media(properties, media_db, is_full_pull):
-    new_media = {}
-    for listingKey in media_db:
-        # If ListingKey from database is in the properties
-        if listingKey in properties:
-            for media in properties[listingKey]["Media"]:
-                media_exists = False
-                for i in range(len(media_db[listingKey])):
-                    # If mediaKey from property matches the database entry
-                    # Check for any change in LastModifiedTime
-                    if media["MediaKey"] == media_db[listingKey][i][0]:
-                        media_exists = True
-                        _check_modification_time(media, media_db[listingKey][i])
-                    if i == len(media_db[listingKey]) - 1:
-                        # If mediaKey is not present in the database,
-                        # Add it to the database
-                        if media_exists is False:
-                            try:
-                                new_media[listingKey].append(_create_media(
-                                    media, listingKey))
-                            except KeyError:
-                                new_media[listingKey] = [_create_media(
-                                    media, listingKey)]
-        else:
-            # If ListingKey from database is not in properties
-            for i in range(len(media_db[listingKey])):
-                # Delete the property from database if full pull
-                if is_full_pull is True:
-                    media_db[listingKey][i][4] = int(
-                        db_utils.ListingState.DELETE)
-                # Do not change anything if not full pull
-                else:
-                    media_db[listingKey][i][4] = int(
-                        db_utils.ListingState.NO_CHANGE)
-    _merge_media(media_db, new_media)
-    # If listingkey from properties is not present in database, add
-    # the respective media of that ListingKey as NEW to the database
-    for key in properties:
-        if media_db.get(key) is None:
-            media_values = properties[key]["Media"]
-            for media in media_values:
-                try:
-                    media_db[key].append(_create_media(media, key))
-                except KeyError:
-                    media_db[key] = [_create_media(media, key)]
-    return media_db
+def parse_media(
+    api_properties: dict[str, dict[str, Any]],
+    db_medias: dict[str, list[Any]],
+    is_full_pull: bool
+) -> dict[str, list[Any]]:
+    """
+    Parse the API properties and update the medias and status.
+    """
+    new_media: dict[str, list[Any]] = defaultdict(list)
+
+    # Check existing media from the database
+    for listing_key in db_medias:
+        medias_length: int = len(db_medias[listing_key])
+
+        if listing_key not in api_properties:
+            continue
+
+        for api_media in api_properties[listing_key]["Media"]:
+            media_exists = False
+
+            for i in range(medias_length):
+                # If media key from property matches the database entry
+                if api_media["MediaKey"] == db_medias[listing_key][i][0]:
+                    media_exists = True
+                    _update_if_new(api_media, db_medias[listing_key][i])
+
+                if (i == medias_length - 1) and not media_exists:
+                    new_media[listing_key].append(_create_media(api_media, listing_key))
+
+    _merge_media(db_medias, new_media)
+
+    # Check for new media from the API
+    for listing_key in api_properties:
+        if db_medias.get(listing_key):
+            continue
+
+        media_values: list[dict[str, Any]] = api_properties[listing_key]["Media"]
+        if not media_values:
+            continue
+
+        db_medias[listing_key] = []
+        for api_media in media_values:
+            db_medias[listing_key].append(_create_media(api_media, listing_key))
+
+    return db_medias

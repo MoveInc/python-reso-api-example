@@ -1,144 +1,178 @@
-import os
+from datetime import datetime, timezone
 from time import sleep
+from typing import Any, Optional
 
 import requests
-import media_utils as media_utils
-import db_utils as db_utils
-from datetime import datetime, timezone
+import pymysql
+from pymysql.connections import Connection
+from pymysql.cursors import Cursor
+
+import media_utils
+import data_utils
+from data_utils import ListingState
 
 
-# Get current UTC time and convert to the ISO format.
 def get_current_time_iso() -> str:
+    """Get current UTC time and convert to the ISO format."""
     time = datetime.now(tz=timezone.utc)
-    iso_time = time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
-    return iso_time
+    return time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
 
-# Authenticate to the api with the client credentials.
 def authenticate(client_id: str, client_secret: str) -> str:
+    """Authenticate to the api with the client credentials."""
     url: str = "https://api.listhub.com/oauth2/token"
-    data: dict = {"grant_type": "client_credentials", "client_id": client_id,
-                  "client_secret": client_secret}
-    request: requests.Response = requests.post(url, data=data)
-    response: dict = request.json()
-    access_token = response["access_token"]
-    return access_token
+    data: dict[str, str] = {
+        "grant_type": "client_credentials",
+        "client_id": client_id,
+        "client_secret": client_secret
+    }
+
+    response: requests.Response = requests.post(url, data=data)
+    data = response.json()
+
+    return data["access_token"]
 
 
-# For all the listings, check the listing status and update the database
-def _update_db(properties, listings_db, media_db, db_conn, db_cursor) -> None:
-    for key in listings_db:
-        if listings_db[key] == int(db_utils.ListingState.NEW):
-            db_utils.insert_table_data(key, properties, db_conn, db_cursor)
-            _update_media(key, media_db, db_conn, db_cursor)
-        elif listings_db[key] == int(db_utils.ListingState.UPDATE):
-            db_utils.update_table_data(key, properties, db_conn, db_cursor)
-            _update_media(key, media_db, db_conn, db_cursor)
-        elif listings_db[key] == int(db_utils.ListingState.DELETE):
-            _update_media(key, media_db, db_conn, db_cursor)
-            db_utils.delete_table_data(key, db_conn, db_cursor)
-        elif listings_db[key] == int(db_utils.ListingState.DEFAULT):
-            print("DEFAULT Case not handled")
+def _update_db(
+    api_properties: dict[str, dict[str, Any]],
+    listing_states: dict[str, int],
+    is_full_pull: bool,
+    cursor: Cursor
+) -> None:
+    """For all the listings, check the listing status and update the database."""
+    print("Updating database")
+
+    db_medias: dict[str, list[Any]] = data_utils.get_medias(cursor)
+    db_medias = media_utils.parse_media(api_properties, db_medias, is_full_pull)
+
+    for listing_key in api_properties:
+        if listing_states[listing_key] == int(ListingState.NEW):
+            data_utils.insert_property(listing_key, api_properties, cursor)
+            _update_media(listing_key, db_medias, cursor)
+        elif listing_states[listing_key] == int(ListingState.UPDATE):
+            data_utils.update_property(listing_key, api_properties, cursor)
+            _update_media(listing_key, db_medias, cursor)
 
 
-# For all the media to corresponding listingKey, update the database.
-def _update_media(listingkey: str, media_db: dict, db_conn, db_cursor) -> None:
-    if listingkey in media_db:
-        for media in media_db[listingkey]:
-            if media[4] == int(db_utils.ListingState.NEW):
-                db_utils.insert_media(media, db_conn, db_cursor)
-            elif media[4] == int(db_utils.ListingState.UPDATE):
-                db_utils.update_media(media, db_conn, db_cursor)
-            elif media[4] == int(db_utils.ListingState.DELETE):
-                db_utils.delete_media(media, db_conn, db_cursor)
-            elif media[4] == int(db_utils.ListingState.DEFAULT):
-                db_utils.delete_media(media, db_conn, db_cursor)
+def _update_media(listing_key: str, medias: dict[str, list[Any]], cursor: Cursor) -> None:
+    """For all the media with matching listing key, update the database."""
+    if listing_key not in medias:
+        return
+
+    for media in medias[listing_key]:
+        if media[4] == int(ListingState.NEW):
+            data_utils.insert_media(media, cursor)
+        elif media[4] == int(ListingState.UPDATE):
+            data_utils.update_media(media, cursor)
 
 
-# Attempts request, retries on exception or None
-def _attempt_request(url: str, headers: dict):
+# TODO: Should we use a retry library here instead
+def _attempt_request(url: str, headers: dict) -> Optional[requests.Response]:
+    """Attempts request with retries on exception."""
     tries = 1
     while tries < 5:
         try:
-            req = requests.get(url, headers=headers)
-            if req is not None:
-                return req
-        except ConnectionError:
-            print("Connection error", url)
+            response = requests.get(url, headers=headers)
+            if response:
+                return response
+        except ConnectionError as err:
+            print(f"Connection error: {err}")
+
         sleep(1)
         tries += 1
         print(f"Retry: {tries}")
+
     print("Failed to get data from the API.")
     return None
 
 
-# Get properties in a results page and return the next link and properties.
-def _get_data(url: str, properties: dict, access_token: str) -> tuple:
+def _get_properties_data(url: str, access_token: str, properties: dict) -> tuple[str, dict]:
+    """Get properties in a results page and return the next link and properties."""
+    print(f"Getting property listings: {url}")
+
     headers = {"Authorization": "Bearer " + access_token}
-    request = _attempt_request(url, headers)
-    if request is not None:
-        response = request.json()
-        for reso_property in response["value"]:
-            properties.update({reso_property["ListingKey"]: reso_property})
-        try:
-            next_link = response["@odata.nextLink"]
-        except KeyError:
-            next_link = ""
-        return next_link, properties
-    else:
+    response = _attempt_request(url, headers)
+    if not response:
         raise ConnectionError("Could not get data from API")
 
+    data = response.json()
+    for reso_property in data["value"]:
+        properties.update({reso_property["ListingKey"]: reso_property})
 
-# Iterate through the next links till the last one.
-def get_properties(url: str, access_token: str, listingkey_db, opts: dict, db_conn, db_cursor, full: bool) -> None:
-    count = 0
-    properties = {}
-    while True:
-        print("Get Listings: " + url)
-        url, properties = _get_data(url, properties, access_token)
-        count += len(properties)
-        parse_listings(properties, listingkey_db, full, db_conn, db_cursor, opts)
-        print("Total properties processed: " + str(count))
-        properties = {}
-        if url == "":
-            break
+    next_link = data.get("@odata.nextLink") or ""
+
+    return next_link, properties
 
 
-# Iterate through the properties and listings from the database. Compare
-# them and create, append or update the listings_db with the new or updated
-# properties and create media.
-def parse_listings(properties: dict, listings_db, is_full_pull: bool, db_conn, db_cursor, opts: dict) -> None:
-    media_db = db_utils.get_media_db(db_cursor)
-    for listingKey in listings_db:
-        if listingKey in properties:
-            listings_db[listingKey] = int(db_utils.ListingState.UPDATE)
-        else:
-            if is_full_pull is True:
-                listings_db[listingKey] = int(db_utils.ListingState.DELETE)
-            else:
-                listings_db[listingKey] = int(db_utils.ListingState.NO_CHANGE)
-    for key in properties:
-        if listings_db.get(key) is None:
-            listings_db[key] = int(db_utils.ListingState.NEW)
-    media_db = media_utils.parse_media(properties, media_db, is_full_pull)
-    print("Updating Database")
-    _update_db(properties, listings_db, media_db, db_conn, db_cursor)
+def _process_listings(
+    api_properties: dict[str, dict[str, Any]],
+    listing_states: dict[str, int],
+    is_full_pull: bool,
+    cursor: Cursor,
+    options: dict[str, str]
+) -> None:
+    """
+    Iterate through the API properties to update listing states then update the database.
+    """
+    for listing_key in listing_states:
+        if listing_key in api_properties:
+            listing_states[listing_key] = int(ListingState.UPDATE)
+
+    for listing_key in api_properties:
+        if not listing_states.get(listing_key):
+            listing_states[listing_key] = int(ListingState.NEW)
+
+    _update_db(api_properties, listing_states, is_full_pull, cursor)
 
 
-# Parses a single argument from the args; if it cannot be found
-# it will try to find it in the environment variables else raise error.
-def parse_arg(args: dict, arg: str) -> str:
-    value: str = args.get(arg)
-    if value is None:
-        value = os.environ.get(arg)
+def get_properties(
+    url: str,
+    access_token: str,
+    connection: Connection,
+    options: dict[str, str],
+    is_full_pull: Optional[bool] = False
+) -> bool:
+    """Get the properties from the API."""
+    success: bool = False
+    count: int = 0
+    api_properties: dict[str, dict[str, Any]] = {}
 
-    if value is None:
-        raise EnvironmentError(f"{arg} is not present in options or the environment.")
+    with connection.cursor() as cursor:
+        listing_states: dict[str, int] = data_utils.get_listing_states(cursor)
 
-    return value
+        try:
+            while True:
+                success = False
+                url, api_properties = _get_properties_data(url, access_token, api_properties)
 
+                _process_listings(api_properties, listing_states, is_full_pull, cursor, options)
+                connection.commit()
+                success = True
 
-def ensure_args(opts: dict):
-    required_opts = ["client_id", "client_secret", "db_name", "db_user", "db_password"]
-    for i in required_opts:
-        parse_arg(opts, i)
+                count += len(api_properties)
+                print("Total properties processed: " + str(count))
+
+                api_properties = {}
+                if not success or url == "":
+                    break
+
+            if success and is_full_pull:
+                delete_listing_keys =(key for key in listing_states.keys() if listing_states[key] == int(ListingState.DEFAULT))
+                for listing_key in delete_listing_keys:
+                    data_utils.delete_media(listing_key, cursor)
+                    data_utils.delete_property(listing_key, cursor)
+
+                connection.commit()
+        except (pymysql.IntegrityError, pymysql.DataError) as err:
+            print("DataError or IntegrityError")
+            print(err)
+            connection.rollback()
+        except pymysql.ProgrammingError as err:
+            print("Programming Error")
+            print(err)
+            connection.rollback()
+        except pymysql.Error as err:
+            print(err)
+            connection.rollback()
+
+    return success
